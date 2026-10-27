@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    color: #e9eaee;
+    background-color: #141519;
+    /* Мягкие цветовые подсветки по углам + ровный градиент */
+    background-image:
+      radial-gradient(1100px 620px at 6% -14%, rgba(139, 124, 246, 0.24), transparent 60%),
+      radial-gradient(900px 520px at 98% 4%, rgba(61, 220, 132, 0.11), transparent 62%),
+      radial-gradient(1200px 720px at 68% 122%, rgba(88, 101, 242, 0.18), transparent 64%),
+      linear-gradient(180deg, #191a20 0%, #141519 55%, #101115 100%);
+    background-attachment: fixed;
+    overflow: hidden;
+    font-optical-sizing: auto;
+    text-rendering: auto;
+  }
+
+  ::selection {
+    background: rgba(139, 124, 246, 0.35);
+  }
+
+  *:focus-visible {
+    outline: 2px solid rgba(139, 124, 246, 0.65);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border-2 border-line bg-panel/80 shadow-panel;
+  }
+
+  .divider {
+    @apply h-0.5 rounded-full bg-line2/50;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply border-line bg-white/[0.03] text-muted hover:bg-white/[0.06] hover:text-ink;
+  }
+
+  .btn-toolbar {
+    @apply border-line/50 bg-white/[0.03] text-muted backdrop-blur-xl hover:border-line2/55 hover:bg-white/[0.055] hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply border-bad/25 bg-bad/[0.09] text-bad hover:border-bad/50 hover:bg-bad/[0.16];
+  }
+
+  .btn-ok {
+    @apply border-ok/25 bg-ok/[0.08] text-ok hover:border-ok/45 hover:bg-ok/[0.14];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border border-line bg-white/[0.025] px-1.5 py-0.5 font-mono text-[11px] text-dim;
+  }
+
+  .select {
+    @apply cursor-pointer appearance-none rounded-lg border border-line bg-panel2 py-1.5 pl-2.5 pr-7 text-xs text-muted transition-colors hover:border-line2 hover:text-ink focus:outline-none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%238d9099' stroke-width='1.7'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+}
