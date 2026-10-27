@@ -4,6 +4,7 @@
 //! должны совпадать с фронтендом, иначе invoke вернёт «command not found».
 
 pub mod admin;
+pub mod cleanup;
 pub mod kb;
 pub mod kb_en;
 pub mod services;
@@ -80,7 +81,10 @@ fn restart_service(name: String) -> Result<ActionOutcome, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    // До создания окна: WebView2 ещё не занял файлы профиля.
+    cleanup::prune();
+
+    let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             list_services,
             is_admin,
@@ -92,6 +96,13 @@ pub fn run() {
             stop_service,
             restart_service
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Не удалось запустить Servo");
+
+    app.run(|_app, event| {
+        // На выходе подчищаем кэш, накопленный за сессию.
+        if let tauri::RunEvent::Exit = event {
+            cleanup::prune();
+        }
+    });
 }
