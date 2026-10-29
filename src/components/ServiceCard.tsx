@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ChevronDown,
-  Globe,
   Info,
   Lightbulb,
   Loader2,
@@ -329,7 +328,7 @@ function ServiceCard({
                 onClick={() => onCheckOnline(service)}
                 className="btn btn-ghost"
               >
-                <Globe size={12} />
+                <Info size={12} />
                 {t("online.button")}
               </button>
 

@@ -130,9 +130,9 @@ const ru = {
   "details.category": "Категория",
   "details.binary": "Путь к исполняемому файлу",
 
-  "online.button": "Проверить онлайн",
-  "online.buttonTitle": "Спросить ИИ об этой службе",
-  "online.title": "Информация о службе",
+  "online.button": "Подробнее",
+  "online.buttonTitle": "Подробнее о службе: данные и объяснение ИИ",
+  "online.title": "Подробнее о службе",
   "online.subtitle": "Локальные данные Windows и объяснение от ИИ.",
   "online.local": "Данные службы",
   "online.internet": "Ответ ИИ",
@@ -294,7 +294,7 @@ const en: Dict = {
   "card.fallbackDesc":
     "No system description provided. Service “{name}”, startup type: {start}. Disable it only if you understand what it does.",
   "card.localizedDesc":
-    "The system description for this service is only available in the Windows display language. Service “{name}”, startup type: {start}. Use “Check online” for details.",
+    "The system description for this service is only available in the Windows display language. Service “{name}”, startup type: {start}. Open “Details” for more.",
   "card.protected": "Protected",
   "card.protectedTitle": "Critical Windows service — disabling is blocked",
   "card.enable": "Enable",
@@ -323,9 +323,9 @@ const en: Dict = {
   "details.category": "Category",
   "details.binary": "Executable path",
 
-  "online.button": "Check online",
-  "online.buttonTitle": "Ask AI about this service",
-  "online.title": "Service information",
+  "online.button": "Details",
+  "online.buttonTitle": "More about this service: data and an AI explanation",
+  "online.title": "Service details",
   "online.subtitle": "Local Windows data and an AI explanation.",
   "online.local": "Service data",
   "online.internet": "AI answer",

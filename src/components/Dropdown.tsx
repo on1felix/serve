@@ -345,7 +345,7 @@ export default function Dropdown<T extends string>({
                       onMouseDown={(event) => event.preventDefault()}
                       onMouseEnter={() => setActive(index)}
                       onClick={() => choose(index)}
-                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-[7px] text-left text-[12px] transition-colors duration-100 ${
+                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-[7px] text-left text-[12px] transition-colors duration-150 ${
                         option.disabled
                           ? "cursor-not-allowed text-dim/40"
                           : isActive

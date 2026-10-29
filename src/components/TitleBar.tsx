@@ -89,25 +89,25 @@ export default function TitleBar({ admin, onElevate, elevating }: Props) {
           <button
             onClick={() => void win?.minimize().catch(() => undefined)}
             aria-label={t("window.minimize")}
-            className="flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 [transition:background-color_0.25s_ease-in-out,color_0.25s_ease-in-out]"
+            className="flex h-8 w-8 items-center justify-center rounded transition-colors duration-150 hover:bg-white/10"
           >
             <Minus size={16} className="text-[#656571]" />
           </button>
           <button
             onClick={toggleMaximize}
             aria-label={t("window.maximize")}
-            className="flex h-8 w-8 items-center justify-center rounded hover:bg-white/10 [transition:background-color_0.25s_ease-in-out,color_0.25s_ease-in-out]"
+            className="flex h-8 w-8 items-center justify-center rounded transition-colors duration-150 hover:bg-white/10"
           >
             <Square size={14} className="text-[#656571]" />
           </button>
           <button
             onClick={() => void win?.close().catch(() => undefined)}
             aria-label={t("window.close")}
-            className="group flex h-8 w-8 items-center justify-center rounded hover:bg-[#ff3b30]/30 [transition:background-color_0.25s_ease-in-out,color_0.25s_ease-in-out]"
+            className="group flex h-8 w-8 items-center justify-center rounded transition-colors duration-150 hover:bg-[#ff3b30]/30"
           >
             <X
               size={16}
-              className="text-[#656571] transition-colors duration-200 group-hover:text-[#ff6666]"
+              className="text-[#656571] transition-colors duration-150 group-hover:text-[#ff6666]"
             />
           </button>
         </div>
@@ -148,7 +148,7 @@ function LangToggle() {
           key={value}
           onClick={() => setLang(value)}
           aria-pressed={lang === value}
-          className={`relative z-10 grid h-6 w-8 cursor-pointer place-items-center text-[11px] font-bold uppercase tracking-wide transition-colors duration-300 ${tone(
+          className={`relative z-10 grid h-6 w-8 cursor-pointer place-items-center text-[11px] font-bold uppercase tracking-wide transition-colors duration-150 ${tone(
             value,
             lang === value
           )}`}

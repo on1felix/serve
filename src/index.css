@@ -64,7 +64,7 @@
   }
 
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity] duration-150 disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .btn-ghost {
@@ -81,6 +81,11 @@
 
   .btn-ok {
     @apply border-ok/25 bg-ok/[0.08] text-ok hover:border-ok/45 hover:bg-ok/[0.14];
+  }
+
+  /* Акцентная кнопка: нежно-фиолетовая, в тон окнам-предупреждениям. */
+  .btn-accent {
+    @apply border-accent/35 bg-accent/[0.12] text-accent hover:border-accent/60 hover:bg-accent/[0.2];
   }
 
   .chip {

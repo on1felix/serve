@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
   Bot,
   Info,
   Loader2,
@@ -133,7 +134,7 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
 
   return (
     <motion.div
-      className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4 backdrop-blur-[6px]"
+      className="fixed inset-0 z-[80] grid place-items-center bg-black/65 p-6 backdrop-blur-[3px]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -143,16 +144,16 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label={t("online.title")}
-        className="flex max-h-[86vh] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-line2/45 bg-panel/85 shadow-panel backdrop-blur-2xl"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.14, ease: "easeOut" }}
+        className="panel flex h-[min(88vh,700px)] w-full max-w-[880px] flex-col overflow-hidden bg-panel/80 shadow-[0_30px_90px_-34px_rgba(0,0,0,0.95)]"
+        initial={{ opacity: 0, y: 14, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start gap-3 border-b border-line/50 bg-white/[0.015] px-5 py-4">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-accent/25 bg-accent/10">
-            <Bot size={18} className="text-accent" />
+        <div className="flex items-start gap-3 border-b-2 border-line/70 bg-accent/[0.05] px-5 py-4">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border-2 border-accent/25 bg-accent/10">
+            <Info size={18} className="text-accent" />
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-[15px] font-semibold text-ink">{t("online.title")}</h2>
@@ -164,16 +165,20 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
           <button
             onClick={onClose}
             aria-label={t("common.close")}
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-dim transition-colors hover:bg-white/[0.07] hover:text-ink"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-dim transition-colors duration-150 hover:bg-white/[0.07] hover:text-ink"
           >
             <X size={15} />
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4">
-          <section>
-            <SectionTitle icon={<Info size={13} />}>{t("online.local")}</SectionTitle>
-            <p className="mt-2 text-[12px] leading-relaxed text-muted">{description}</p>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <section className="rounded-xl border-2 border-line bg-white/[0.02] px-3.5 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionTitle icon={<Info size={13} />}>{t("online.local")}</SectionTitle>
+              <span className="ml-auto chip">{statusLabel}</span>
+            </div>
+
+            <p className="mt-2.5 text-[12px] leading-relaxed text-muted">{description}</p>
 
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
               <Field label={t("details.serviceName")} value={service.name} mono />
@@ -197,18 +202,16 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
                 <Field label={t("details.binary")} value={service.binaryPath || "—"} mono />
               </div>
             </div>
-
-            {note && (
-              <div className="mt-3 flex items-start gap-2 rounded-lg border border-line/60 bg-white/[0.025] px-3 py-2 text-[12px] leading-relaxed text-muted">
-                <Info size={12} className="mt-[2px] shrink-0 text-dim" />
-                <span>{note}</span>
-              </div>
-            )}
           </section>
 
-          <div className="my-4 h-px bg-line/40" />
+          {note && (
+            <div className="flex items-start gap-2 rounded-xl border-2 border-warn/20 bg-warn/[0.05] px-3 py-2.5 text-[12px] leading-relaxed text-warn/90">
+              <AlertTriangle size={13} className="mt-[1px] shrink-0" />
+              <span>{note}</span>
+            </div>
+          )}
 
-          <section>
+          <section className="rounded-xl border-2 border-line bg-white/[0.02] px-3.5 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <SectionTitle icon={<Sparkles size={13} />}>
                 {t("online.internet")}
@@ -217,15 +220,12 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
             </div>
 
             {status === "idle" && (
-              <div className="mt-3 rounded-xl border border-line/60 bg-white/[0.02] px-3 py-3">
+              <div className="mt-3 rounded-lg border border-line/60 bg-white/[0.02] px-3 py-3">
                 <p className="text-[12px] leading-relaxed text-muted">
                   {t("online.askAiHint")}
                 </p>
-                <button
-                  onClick={() => setAsked(true)}
-                  className="btn btn-ghost mt-3 px-3"
-                >
-                  <Sparkles size={12} className="text-accent" />
+                <button onClick={() => setAsked(true)} className="btn btn-accent mt-3 px-3">
+                  <Sparkles size={12} />
                   {t("online.askAi")}
                 </button>
               </div>
@@ -234,8 +234,8 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
             {status === "loading" && <LookupSkeleton />}
 
             {status === "ready" && info && (
-              <div className="mt-3 flex gap-2.5 rounded-xl border border-line/60 bg-white/[0.02] px-3 py-3">
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent/10">
+              <div className="mt-3 flex gap-2.5 rounded-lg border border-accent/20 bg-accent/[0.05] px-3 py-3">
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-accent/25 bg-accent/10">
                   <Bot size={14} className="text-accent" />
                 </div>
                 <p className="min-w-0 whitespace-pre-line text-[12px] leading-relaxed text-muted">
@@ -245,7 +245,7 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
             )}
 
             {status === "empty" && (
-              <div className="mt-3 flex items-start gap-2 rounded-xl border border-line/60 bg-white/[0.02] px-3 py-2.5 text-[12px] leading-relaxed">
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-line/60 bg-white/[0.02] px-3 py-2.5 text-[12px] leading-relaxed">
                 <SearchX size={15} className="mt-[1px] shrink-0 text-dim" />
                 <div>
                   <p className="font-medium text-ink">{t("online.notFoundTitle")}</p>
@@ -256,7 +256,7 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
 
             {status === "error" && (
               <div
-                className={`mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed ${
+                className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed ${
                   rateLimited
                     ? "border-warn/25 bg-warn/[0.06]"
                     : "border-bad/25 bg-bad/[0.06]"
@@ -297,7 +297,7 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
           </section>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/50 bg-white/[0.015] px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-line/70 bg-white/[0.015] px-5 py-3">
           <p className="text-[11px] text-dim">
             {t("online.offline")}
             {checkedAt && (
@@ -312,12 +312,12 @@ export default function ServiceInfoDialog({ service, onClose }: Props) {
             <button
               onClick={() => void openExternal(webSearchUrl(service, lang))}
               data-tip={t("online.searchWebTitle")}
-              className="btn btn-ghost h-[30px] px-3 transition-none"
+              className="btn btn-accent h-[30px] px-3"
             >
               <Search size={12} />
               {t("online.searchWeb")}
             </button>
-            <button onClick={onClose} className="btn btn-ghost h-[30px] px-3.5 transition-none">
+            <button onClick={onClose} className="btn btn-ghost h-[30px] px-3.5">
               {t("common.close")}
             </button>
           </div>
@@ -339,7 +339,7 @@ function webSearchUrl(service: ServiceInfo, lang: "ru" | "en"): string {
 function SectionTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <h3 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-dim">
-      {icon}
+      <span className="text-accent/75">{icon}</span>
       {children}
     </h3>
   );
