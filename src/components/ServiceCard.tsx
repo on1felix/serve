@@ -77,7 +77,7 @@ function dotMeta(service: ServiceInfo) {
       bar: "bg-bad/70",
       labelKey: "status.disabled",
       pill: "border-bad/25 bg-bad/[0.08] text-bad",
-      pulse: false,
+      ring: "",
     };
   }
   if (service.status === "running") {
@@ -87,7 +87,7 @@ function dotMeta(service: ServiceInfo) {
       bar: "bg-ok/70",
       labelKey: "status.running",
       pill: "border-ok/25 bg-ok/[0.08] text-ok",
-      pulse: true,
+      ring: "animate-pulse-ring",
     };
   }
   if (service.status === "start_pending" || service.status === "stop_pending") {
@@ -97,7 +97,7 @@ function dotMeta(service: ServiceInfo) {
       bar: "bg-accent/70",
       labelKey: service.status === "start_pending" ? "status.startPending" : "status.stopPending",
       pill: "border-accent/25 bg-accent/[0.08] text-accent",
-      pulse: true,
+      ring: "animate-pulse-ring-accent",
     };
   }
   if (service.status === "paused") {
@@ -107,7 +107,7 @@ function dotMeta(service: ServiceInfo) {
       bar: "bg-warn/60",
       labelKey: "status.paused",
       pill: "border-warn/20 bg-warn/[0.06] text-warn",
-      pulse: false,
+      ring: "",
     };
   }
   return {
@@ -116,7 +116,7 @@ function dotMeta(service: ServiceInfo) {
     bar: "bg-warn/60",
     labelKey: "status.stopped",
     pill: "border-warn/20 bg-warn/[0.06] text-warn",
-    pulse: false,
+    ring: "",
   };
 }
 
@@ -186,9 +186,7 @@ function ServiceCard({
       <div className="flex gap-3.5">
         <div className="pt-[7px]">
           <span
-            className={`block h-2.5 w-2.5 rounded-full ${status.dot} ${status.glow} ${
-              status.pulse ? "animate-pulse-ring" : ""
-            }`}
+            className={`block h-2.5 w-2.5 rounded-full ${status.dot} ${status.glow} ${status.ring}`}
           />
         </div>
 

@@ -2,6 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import {
   Activity,
   AlertTriangle,
@@ -30,10 +31,6 @@ import { localizeBackend, useI18n } from "./i18n";
 import { displayName, serviceSearchText } from "./serviceText";
 
 const PAGE = 80;
-
-// Автообновление должно быть заметным, но не мешать: держим иконку
-// вращающейся не меньше одного полного оборота.
-const AUTO_SPIN_MS = 1000;
 
 const filterTitleKeys: Record<FilterKey, string> = {
   all: "title.all",
@@ -82,8 +79,6 @@ export default function App() {
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [admin, setAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [autoRefreshing, setAutoRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elevating, setElevating] = useState(false);
 
@@ -96,15 +91,15 @@ export default function App() {
   const [confirming, setConfirming] = useState<ServiceInfo | null>(null);
   const [checking, setChecking] = useState<ServiceInfo | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [stuck, setStuck] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
-  const busyRef = useRef(false);
   const toastSeq = useRef(0);
   const servicesRef = useRef<ServiceInfo[]>([]);
+  const inFlight = useRef(false);
+  const pendingReload = useRef(false);
 
   const pushToast = useCallback((toast: Omit<Toast, "id">) => {
     toastSeq.current += 1;
@@ -119,58 +114,104 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const load = useCallback(async (showSpinner: boolean, auto = false) => {
-    const startedAt = performance.now();
-    if (showSpinner) setLoading(true);
-    else if (auto) setAutoRefreshing(true);
-    else setRefreshing(true);
-    try {
-      const [list, isAdmin] = await Promise.all([api.listServices(), api.isAdmin()]);
+  // Сохраняем ссылки на неизменившиеся службы: memo-карточки не
+  // перерисовываются, и автообновление не вызывает рывков.
+  const applyList = useCallback((list: ServiceInfo[], sync = false) => {
+    const previous = servicesRef.current;
+    const byName = new Map(previous.map((service) => [service.name, service]));
+    const merged = list.map((service) => {
+      const old = byName.get(service.name);
+      return old && sameService(old, service) ? old : service;
+    });
+    const changed =
+      merged.length !== previous.length || merged.some((service, i) => service !== previous[i]);
 
-      // Сохраняем ссылки на неизменившиеся службы: memo-карточки не
-      // перерисовываются, и автообновление не вызывает рывков.
-      const previous = servicesRef.current;
-      const byName = new Map(previous.map((service) => [service.name, service]));
-      const merged = list.map((service) => {
-        const old = byName.get(service.name);
-        return old && sameService(old, service) ? old : service;
-      });
-      const changed =
-        merged.length !== previous.length || merged.some((service, i) => service !== previous[i]);
+    servicesRef.current = merged;
+    if (!changed) return;
 
-      servicesRef.current = merged;
-      setAdmin(isAdmin);
-      setError(null);
-
-      if (!changed) {
-        setUpdatedAt(Date.now());
-      } else {
-        const apply = () => {
-          setServices(merged);
-          setUpdatedAt(Date.now());
-        };
-        if (showSpinner) apply();
-        else startTransition(apply);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-      if (auto) {
-        const remain = AUTO_SPIN_MS - (performance.now() - startedAt);
-        if (remain > 0) {
-          await new Promise((resolve) => window.setTimeout(resolve, remain));
-        }
-        setAutoRefreshing(false);
-      } else {
-        setRefreshing(false);
-      }
-    }
+    if (sync) setServices(merged);
+    else startTransition(() => setServices(merged));
   }, []);
+
+  // Бэкенд присылает не весь список, а только изменившиеся службы: так
+  // событие остаётся маленьким даже при опросе пять раз в секунду.
+  const applyChanges = useCallback((changes: { updated: ServiceInfo[]; removed: string[] }) => {
+    const previous = servicesRef.current;
+    const byName = new Map(previous.map((service) => [service.name, service]));
+    for (const name of changes.removed) byName.delete(name);
+    for (const service of changes.updated) byName.set(service.name, service);
+
+    const merged = Array.from(byName.values());
+    if (merged.length === previous.length && merged.every((s, i) => s === previous[i])) return;
+
+    servicesRef.current = merged;
+    startTransition(() => setServices(merged));
+  }, []);
+
+  const load = useCallback(
+    async (showSpinner: boolean) => {
+      // Параллельные перечисления ни к чему: помечаем, что после текущего
+      // нужен ещё один проход (например, после действия над службой).
+      if (inFlight.current) {
+        pendingReload.current = true;
+        return;
+      }
+      inFlight.current = true;
+      if (showSpinner) setLoading(true);
+      try {
+        const [list, isAdmin] = await Promise.all([api.listServices(), api.isAdmin()]);
+        setAdmin(isAdmin);
+        setError(null);
+        applyList(list, showSpinner);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+        inFlight.current = false;
+        if (pendingReload.current) {
+          pendingReload.current = false;
+          void load(false);
+        }
+      }
+    },
+    [applyList],
+  );
 
   useEffect(() => {
     void load(true);
   }, [load]);
+
+  // Список приходит из бэкенда: там каждые 200 мс перечисляются службы и,
+  // если что-то изменилось, приходит событие со свежим списком. Таймера в
+  // вебвью нет — его замораживал WebView2, когда окно теряло фокус.
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let stopped = false;
+    let stopList: (() => void) | undefined;
+    let stopError: (() => void) | undefined;
+
+    void listen<{ updated: ServiceInfo[]; removed: string[] }>("services-changed", (event) => {
+      setError(null);
+      applyChanges(event.payload);
+    }).then((unlisten) => {
+      if (stopped) unlisten();
+      else stopList = unlisten;
+    });
+
+    void listen<string>("services-error", (event) => {
+      setError(event.payload);
+    }).then((unlisten) => {
+      if (stopped) unlisten();
+      else stopError = unlisten;
+    });
+
+    return () => {
+      stopped = true;
+      stopList?.();
+      stopError?.();
+    };
+  }, [applyChanges]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -182,19 +223,6 @@ export default function App() {
     if (!isTauri()) return;
     void getCurrentWindow().setTitle(t("window.title")).catch(() => undefined);
   }, [t]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !busyRef.current && !confirming && !checking) {
-        void load(false, true);
-      }
-    }, 12_000);
-    return () => window.clearInterval(timer);
-  }, [load, confirming, checking]);
-
-  useEffect(() => {
-    busyRef.current = pending !== null;
-  }, [pending]);
 
   useEffect(() => {
     setVisible(PAGE);
@@ -502,21 +530,12 @@ export default function App() {
               </div>
             )}
 
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h1 className="text-[20px] font-semibold tracking-tight text-ink">
-                  {t(filterTitleKeys[filter])}
-                </h1>
-                <p className="mt-0.5 text-[12px] text-dim">
-                  {query ? t("app.searchPrefix", { query }) : t("app.legend")}
-                </p>
-              </div>
-              <p className="text-[11.5px] text-dim">
-                {updatedAt
-                  ? t("app.updatedAt", {
-                      time: new Date(updatedAt).toLocaleTimeString(locale),
-                    })
-                  : t("app.loading")}
+            <div className="mb-4">
+              <h1 className="text-[20px] font-semibold tracking-tight text-ink">
+                {t(filterTitleKeys[filter])}
+              </h1>
+              <p className="mt-0.5 text-[12px] text-dim">
+                {query ? t("app.searchPrefix", { query }) : t("app.legend")}
               </p>
             </div>
 
@@ -599,17 +618,12 @@ export default function App() {
                   surface="toolbar"
                 />
 
-                <button
-                  onClick={() => void load(false)}
-                  disabled={refreshing}
-                  className="btn btn-toolbar h-9 px-3"
+                <span
+                  aria-hidden="true"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-line/50 bg-white/[0.03] text-dim backdrop-blur-xl"
                 >
-                  <RefreshCw
-                    size={13}
-                    className={refreshing || autoRefreshing ? "animate-spin" : ""}
-                  />
-                  <span className="hidden sm:inline">{t("toolbar.refresh")}</span>
-                </button>
+                  <RefreshCw size={13} className="animate-spin" />
+                </span>
               </div>
 
               <div className="relative z-10 mt-2 flex items-center justify-between text-[11.5px] text-dim">
@@ -618,7 +632,6 @@ export default function App() {
                   <span className="font-mono text-muted">{shown.length}</span> {t("app.of")}{" "}
                   <span className="font-mono text-muted">{filtered.length}</span>
                 </span>
-                <span className="hidden sm:inline">{t("app.autoRefresh")}</span>
               </div>
               <span className="divider pointer-events-none absolute inset-x-6 bottom-0" />
             </div>

@@ -5,9 +5,11 @@
 //! русскоязычные ошибки, которые фронтенд показывает как есть.
 
 use serde::Serialize;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::GetLastError;
@@ -101,8 +103,14 @@ fn open_scm() -> Result<Scm, String> {
 
 fn open_service(name: &str, access: u32) -> Result<Svc, String> {
     let scm = open_scm()?;
+    open_service_on(scm.0, name, access)
+}
+
+/// Открыть службу на уже открытом менеджере: перечисление списка не должно
+/// заново подключаться к SCM на каждую службу.
+fn open_service_on(scm: SC_HANDLE, name: &str, access: u32) -> Result<Svc, String> {
     let wname = wide(name);
-    let h = unsafe { OpenServiceW(scm.0, wname.as_ptr(), access) };
+    let h = unsafe { OpenServiceW(scm, wname.as_ptr(), access) };
     if h.is_null() {
         Err(format!(
             "Не удалось открыть службу «{}»: {}",
@@ -301,12 +309,114 @@ fn is_third_party(name: &str) -> bool {
     VENDORS.iter().any(|v| n.contains(v))
 }
 
+/// Статические поля службы: описание, путь, тип запуска. Меняются только
+/// при правке конфигурации, поэтому их незачем перечитывать каждую секунду.
+struct Static {
+    description: String,
+    binary_path: String,
+    account: String,
+    start_raw: u32,
+    delayed: bool,
+    can_change: bool,
+    is_system: bool,
+}
+
+struct Cache {
+    at: Option<Instant>,
+    items: HashMap<String, Static>,
+}
+
+/// Сколько живёт кэш статических полей. Состояние и PID приходят живьём
+/// при каждом вызове, а конфигурация меняется редко: без кэша секундный
+/// опрос делал бы больше тысячи вызовов диспетчера служб в секунду.
+const STATIC_TTL: Duration = Duration::from_secs(30);
+
+fn cache() -> &'static Mutex<Cache> {
+    static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        Mutex::new(Cache {
+            at: None,
+            items: HashMap::new(),
+        })
+    })
+}
+
+/// Сбросить кэш — например, после того как мы сами поменяли конфигурацию.
+fn invalidate() {
+    if let Ok(mut cache) = cache().lock() {
+        cache.at = None;
+    }
+}
+
 /// Перечислить все службы WIN32 с описанием и оценкой риска.
 pub fn list() -> Result<Vec<ServiceInfo>, String> {
     let scm = open_scm()?;
-    let mut result: Vec<ServiceInfo> = Vec::new();
-    let mut resume: u32 = 0;
     let root = system_root().to_lowercase();
+    let entries = enumerate(scm.0)?;
+
+    let mut cache = cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let stale = cache.at.map_or(true, |at| at.elapsed() >= STATIC_TTL);
+    if stale {
+        cache.items.clear();
+    }
+
+    let mut result: Vec<ServiceInfo> = Vec::with_capacity(entries.len());
+
+    for (name, display_name, st) in entries {
+        if !cache.items.contains_key(&name) {
+            match statics(scm.0, &name, &root) {
+                Some(info) => {
+                    cache.items.insert(name.clone(), info);
+                }
+                None => continue,
+            }
+        }
+        let info = &cache.items[&name];
+
+        let (verdict, note) = kb::meta(&name);
+        let is_critical = kb::is_critical(&name);
+        let note_en = kb_en::note(&name);
+
+        result.push(ServiceInfo {
+            display_name,
+            status: status_name(st.dwCurrentState).to_string(),
+            start_type: start_type_name(info.start_raw).to_string(),
+            delayed: info.delayed,
+            pid: st.dwProcessId,
+            can_stop: st.dwControlsAccepted & SERVICE_ACCEPT_STOP != 0,
+            can_change: info.can_change,
+            is_system: info.is_system,
+            is_critical,
+            verdict: verdict.to_string(),
+            note: note.to_string(),
+            note_en: note_en.to_string(),
+            binary_path: info.binary_path.clone(),
+            account: info.account.clone(),
+            description: info.description.clone(),
+            name,
+        });
+    }
+
+    if stale {
+        cache.at = Some(Instant::now());
+    }
+    drop(cache);
+
+    result.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
+    Ok(result)
+}
+
+/// Один проход перечисления: имя, отображаемое имя и живой статус.
+fn enumerate(scm: SC_HANDLE) -> Result<Vec<(String, String, SERVICE_STATUS_PROCESS)>, String> {
+    let mut entries = Vec::new();
+    let mut resume: u32 = 0;
     // Службы перечисляются порциями: большой буфер (мегабайт и больше)
     // диспетчер служб отвергает с ошибкой RPC 1783.
     const CHUNK: usize = 64 * 1024;
@@ -317,7 +427,7 @@ pub fn list() -> Result<Vec<ServiceInfo>, String> {
         let mut returned = 0u32;
         let ok = unsafe {
             EnumServicesStatusExW(
-                scm.0,
+                scm,
                 SC_ENUM_PROCESS_INFO,
                 SERVICE_WIN32,
                 SERVICE_STATE_ALL,
@@ -330,11 +440,7 @@ pub fn list() -> Result<Vec<ServiceInfo>, String> {
             )
         };
 
-        let err = if ok == 0 {
-            unsafe { GetLastError() }
-        } else {
-            0
-        };
+        let err = if ok == 0 { unsafe { GetLastError() } } else { 0 };
 
         if ok == 0 && err != 234 && err != 259 {
             return Err(format!(
@@ -352,63 +458,14 @@ pub fn list() -> Result<Vec<ServiceInfo>, String> {
 
         for item in items {
             let name = pcwstr_to_string(item.lpServiceName);
-            let display_name = pcwstr_to_string(item.lpDisplayName);
             if name.is_empty() {
                 continue;
             }
-
-            let st = &item.ServiceStatusProcess;
-            let mut can_change = true;
-            let svc = match open_service(&name, FULL_ACCESS) {
-                Ok(s) => s,
-                Err(_) => {
-                    can_change = false;
-                    match open_service(&name, READ_ACCESS) {
-                        Ok(s) => s,
-                        Err(_) => continue,
-                    }
-                }
-            };
-
-            let cfg = query_config(svc.0);
-            let (binary_path, account, start_raw) = match cfg {
-                Some(cfg) => (cfg.binary_path, cfg.account, cfg.start_type),
-                None => (String::new(), String::new(), u32::MAX),
-            };
-
-            let description = query_description(svc.0);
-            let delayed = start_raw == SERVICE_AUTO_START && query_delayed(svc.0);
-
-            let normalized = normalize_path(&binary_path).to_lowercase();
-            let is_system = if is_third_party(&name) {
-                false
-            } else if normalized.is_empty() {
-                true
-            } else {
-                normalized.starts_with(&root)
-            };
-
-            let (verdict, note) = kb::meta(&name);
-            let is_critical = kb::is_critical(&name);
-            let note_en = kb_en::note(&name);
-            result.push(ServiceInfo {
+            entries.push((
                 name,
-                display_name,
-                description,
-                status: status_name(st.dwCurrentState).to_string(),
-                start_type: start_type_name(start_raw).to_string(),
-                delayed,
-                pid: st.dwProcessId,
-                can_stop: st.dwControlsAccepted & SERVICE_ACCEPT_STOP != 0,
-                can_change,
-                is_system,
-                is_critical,
-                verdict: verdict.to_string(),
-                note: note.to_string(),
-                note_en: note_en.to_string(),
-                binary_path,
-                account,
-            });
+                pcwstr_to_string(item.lpDisplayName),
+                item.ServiceStatusProcess,
+            ));
         }
 
         if ok != 0 || err == 259 || returned == 0 {
@@ -416,12 +473,42 @@ pub fn list() -> Result<Vec<ServiceInfo>, String> {
         }
     }
 
-    result.sort_by(|a, b| {
-        a.display_name
-            .to_lowercase()
-            .cmp(&b.display_name.to_lowercase())
-    });
-    Ok(result)
+    Ok(entries)
+}
+
+/// Читает статические поля одной службы.
+fn statics(scm: SC_HANDLE, name: &str, root: &str) -> Option<Static> {
+    let (svc, can_change) = match open_service_on(scm, name, FULL_ACCESS) {
+        Ok(svc) => (svc, true),
+        Err(_) => (open_service_on(scm, name, READ_ACCESS).ok()?, false),
+    };
+
+    let (binary_path, account, start_raw) = match query_config(svc.0) {
+        Some(cfg) => (cfg.binary_path, cfg.account, cfg.start_type),
+        None => (String::new(), String::new(), u32::MAX),
+    };
+
+    let description = query_description(svc.0);
+    let delayed = start_raw == SERVICE_AUTO_START && query_delayed(svc.0);
+
+    let normalized = normalize_path(&binary_path).to_lowercase();
+    let is_system = if is_third_party(name) {
+        false
+    } else if normalized.is_empty() {
+        true
+    } else {
+        normalized.starts_with(root)
+    };
+
+    Some(Static {
+        description,
+        binary_path,
+        account,
+        start_raw,
+        delayed,
+        can_change,
+        is_system,
+    })
 }
 
 fn wait_for(h: SC_HANDLE, target: u32, timeout_ms: u64) -> Result<(), String> {
@@ -580,6 +667,7 @@ pub fn disable(name: &str) -> Result<ActionOutcome, String> {
     )?;
 
     change_start(svc.0, SERVICE_DISABLED)?;
+    invalidate();
 
     let st = status_of(svc.0);
     let running = st
@@ -612,7 +700,7 @@ pub fn set_startup(name: &str, kind: &str) -> Result<ActionOutcome, String> {
 
     let svc = open_service(name, SERVICE_CHANGE_CONFIG | SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS)?;
 
-    match kind {
+    let result = match kind {
         "manual" => {
             change_start(svc.0, SERVICE_DEMAND_START)?;
             Ok(outcome("Тип запуска: вручную"))
@@ -628,5 +716,8 @@ pub fn set_startup(name: &str, kind: &str) -> Result<ActionOutcome, String> {
             Ok(outcome("Тип запуска: автоматически (отложенно)"))
         }
         _ => unreachable!(),
-    }
+    };
+
+    invalidate();
+    result
 }

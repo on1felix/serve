@@ -41,10 +41,16 @@ export default {
           "70%": { boxShadow: "0 0 0 7px rgba(61,220,132,0)" },
           "100%": { boxShadow: "0 0 0 0 rgba(61,220,132,0)" },
         },
+        "pulse-ring-accent": {
+          "0%": { boxShadow: "0 0 0 0 rgba(139,124,246,0.5)" },
+          "70%": { boxShadow: "0 0 0 7px rgba(139,124,246,0)" },
+          "100%": { boxShadow: "0 0 0 0 rgba(139,124,246,0)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.18s ease-out",
         "pulse-ring": "pulse-ring 2.2s ease-out infinite",
+        "pulse-ring-accent": "pulse-ring-accent 2.2s ease-out infinite",
       },
     },
   },

@@ -7,6 +7,7 @@ pub mod admin;
 pub mod cleanup;
 pub mod kb;
 pub mod kb_en;
+pub mod pump;
 pub mod services;
 
 use services::{ActionOutcome, ServiceInfo};
@@ -98,6 +99,10 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("Не удалось запустить Servo");
+
+    // Опрос служб — в фоновом потоке: таймеры вебвью замирают, когда окно
+    // не в фокусе, а список должен обновляться всегда.
+    pump::start(app.handle().clone());
 
     app.run(|_app, event| {
         // На выходе подчищаем кэш, накопленный за сессию.
