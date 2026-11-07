@@ -4,6 +4,7 @@
 //! должны совпадать с фронтендом, иначе invoke вернёт «command not found».
 
 pub mod admin;
+pub mod bootstrap;
 pub mod cleanup;
 pub mod kb;
 pub mod kb_en;
@@ -83,6 +84,9 @@ fn restart_service(name: String) -> Result<ActionOutcome, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // До создания окна: WebView2 ещё не занял файлы профиля.
+    // Сначала переносим профиль из старой портативной сборки в AppData,
+    // затем чистим тяжёлые кэши уже на новом месте.
+    bootstrap::migrate_legacy_profile();
     cleanup::prune();
 
     let app = tauri::Builder::default()

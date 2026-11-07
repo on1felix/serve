@@ -35,8 +35,9 @@ const HEAVY_DIRS: &[&str] = &[
     "Default/Service Worker/ScriptCache",
 ];
 
-/// Чистит профили рядом с exe (портативная сборка) и в AppData
-/// (установленная версия или старые запуски).
+/// Чистит профиль в AppData. Папку `ServoData` рядом с exe тоже проверяем:
+/// это следы старой портативной сборки, если перенос в AppData почему-то
+/// не удался.
 pub fn prune() {
     if let Some(dir) = std::env::current_exe()
         .ok()
